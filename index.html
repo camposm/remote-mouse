@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>remote-mouse</title>
+        <meta name="description" content="remote-mouse">
+        <meta name="author" content="rremote-mouse">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    </head>
+    <body>
+        <style>
+        html, body {
+            height:100%;
+            margin-top: 0px;
+            margin-bottom: 0px;
+        }
+        #left_button {
+            width: 30%;
+            height: 40px;
+            display:inline-block;
+        }
+        #right_button {
+            width: 30%;
+            height: 40px;
+            display:inline-block;
+        }
+        #spacer_m {
+            width: 10%;
+            display:inline-block;
+        }
+        #scroll_container {
+            border: 1px solid black;
+            width: 15%;
+            height: 40%;
+            display: inline-block;
+            align-self: flex-end;
+            margin-bottom: 100px;
+        }
+        #input_container {
+            width: 80%;
+            display: inline-block;
+            align-self: flex-end;
+        }
+        #main{
+            display: flex; 
+            height: 95%;
+        }
+        #input_field_container {
+            margin-right: 10px;
+            margin-left: 10px;
+            margin-top: 20px;
+        }
+        #text_data {
+            height: 30px;
+            margin-right: 10px;
+            width: 90%;
+        }
+        #submit_text, #submit_enter, #submit_backspace {
+            height: 30px;
+            width: 40px;
+            margin-bottom: 20px;
+            margin-right: 10px;
+            margin-left: 10px;
+        }
+        #gp_button_container {
+            margin-bottom: 30px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        td {
+            height: 80px;
+            text-align: center;
+            -webkit-user-select: none; /* Safari */        
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE10+/Edge */
+            user-select: none; /* Standard */
+        }
+        td.gp_btn {
+            width: 80px;
+        }
+        #mouse_btn_t {
+            border: 0;
+            border-collapse: separate;
+            border-spacing: 30px 0;
+        }
+        td.mouse_btn {
+            height: 50px;
+            width: 120px;
+        }
+
+        </style>
+        <div id="main">
+            <div id="input_container">
+                <!-- <textarea id="my_log" style="width: 300px;"></textarea> -->
+                <div id="gp_button_container">
+                    <center>
+                    <table>
+                        <tr>
+                            <td class="gp_btn" id="gp_btn_0">0</td>
+                            <td class="gp_btn" id="gp_btn_1">1</td>
+                            <td class="gp_btn" id="gp_btn_2">2</td>
+                        </tr>
+                        <tr>
+                            <td class="gp_btn" id="gp_btn_3">3</td>
+                            <td class="gp_btn" id="gp_btn_4">4</td>
+                            <td class="gp_btn" id="gp_btn_5">5</td>
+                        </tr>
+                        <tr>
+                            <td class="gp_btn" id="gp_btn_6">6</td>
+                            <td class="gp_btn" id="gp_btn_7">7</td>
+                            <td class="gp_btn" id="gp_btn_8">8</td>
+                        </tr>
+                    </table>
+                    </center> 
+                </div>
+                <div id="input_field_container">
+                    <center>
+                        <input type="text" id="text_data" onfocus="textinput_onfocus()"><br>
+                        <button type="button" id="submit_text" onclick="submit_text()">&rarr;</button>
+                        <button type="button" id="submit_enter" onclick="submit_enter()">&#9166;</button>
+                        <button type="button" id="submit_backspace" onclick="submit_backspace()">&#8656;</button>
+                    </center>
+                </div>
+                <div id="mouse_button_container">
+                    <center>
+                        <table id="mouse_btn_t">
+                            <tr>
+                                <td class="mouse_btn" id="mouse_btn_l">L</td>
+                                <td class="mouse_btn" id="mouse_btn_r">R</td>
+                            </tr>
+                        </table>
+                    </center>
+                </div>
+            </div>
+            <div id="scroll_container"></div>
+            </div>
+        </div>
+        <script>            
+            //
+            // dev; debugging
+            //
+            function my_log (msg) {
+                //document.getElementById('my_log').textContent += msg + '\n';
+                //document.getElementById('my_log').scrollTop = document.getElementById('my_log').scrollHeight;
+            }
+            
+            //
+            // permissions
+            //
+            if (DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === "function") {
+                DeviceMotionEvent.requestPermission();
+            }
+
+            //
+            // communication to backend
+            //
+            let ctrl_ws_addr = 'wss://' + location.host + '/ctrl';
+            ctrl_ws = new WebSocket(ctrl_ws_addr);
+            ctrl_ws.binaryType = 'arraybuffer';
+            
+            let text_ws_addr = 'wss://' + location.host + '/text';
+            text_ws = new WebSocket(text_ws_addr);
+            
+            ctrl_ws.onopen = function() 
+            {
+                //my_log('connected to ctrl endpoint');
+            };
+            
+            text_ws.onopen = function() 
+            {
+                //my_log('connected to text endpoint');
+            };
+
+            // byte offset - field
+            // Orientation
+            //      0      - type (byte)
+            //      1      - orientation.alpha (float, 32bits)
+            //      5      - orientation.beta (float, 32bits)
+            
+            // UI
+            //      0      - type (byte)
+            //      1      - scroll (float, 32bits)
+            //      5      - button mapping (unsigned int, 32bits)
+            
+            const orientation_buffer = new ArrayBuffer(9);
+            const orientation_view = new DataView(orientation_buffer);
+            const ui_buffer = new ArrayBuffer(9);
+            const ui_view = new DataView(ui_buffer);
+
+            orientation_view.setUint8(0, 0xAA);
+            ui_view.setUint8(0, 0xBB);
+
+            //
+            // UI event handlers
+            //
+            let button_to_code = new Map();
+            let button_bitmap = 0;
+            
+            function button_click_start (event) {
+                event.target.style.backgroundColor = "lightgreen";
+                button_bitmap |= button_to_code.get(event.target);
+                //my_log('click start: ' + event);
+                //my_log('bitmap: ' + (button_bitmap >>> 0).toString(2));
+                
+                ui_view.setUint32(1, button_bitmap);
+                ctrl_ws.send(ui_buffer);
+            }
+            
+            function button_click_end (event) {
+                event.target.style.backgroundColor = "";
+                button_bitmap &= (~button_to_code.get(event.target)) >>> 0;
+                //my_log('click end: ' + event);
+                //my_log('bitmap: ' + (button_bitmap >>> 0).toString(2));
+                ui_view.setUint32(1, button_bitmap);
+                ctrl_ws.send(ui_buffer);
+            }
+
+            let last_scroll_y = 0;
+            let last_scroll_t = 0;
+           
+            function scroll_start (event) {
+                let t = event.targetTouches[0];
+                let r = event.target.getBoundingClientRect();
+                last_scroll_y = (t.clientY - r.y) / r.height;
+                last_scroll_t = event.timeStamp;
+                
+                //my_log('scroll start @ ' + last_scroll_y + ' / ' + last_scroll_t);
+            }
+
+            function scroll_move (event) {
+                let t = event.targetTouches[0];
+                let r = event.target.getBoundingClientRect();
+                let new_scroll_y = (t.clientY - r.y) / r.height;
+                
+                if (new_scroll_y < 0.0) { new_scroll_y = 0.0; }
+                if (new_scroll_y > 1.0) { new_scroll_y = 1.0; }
+                
+                let v_scroll = (new_scroll_y - last_scroll_y) / (event.timeStamp - last_scroll_t) * 1000;
+                
+                ui_view.setFloat32(5, v_scroll);
+                ctrl_ws.send(ui_buffer);
+                //my_log('scroll move: ' + v_scroll);
+
+                last_scroll_y = new_scroll_y;
+                last_scroll_t = event.timeStamp;
+            }
+
+            function textinput_onfocus() {
+                document.getElementById('text_data').value = '';
+            }
+
+            function submit_text() {
+                let text = document.getElementById('text_data').value;
+                text_ws.send(text);
+                document.getElementById('text_data').value = '';
+            }
+            
+            function submit_enter() {
+                text_ws.send('\n');
+            }
+            
+            function submit_backspace() {
+                text_ws.send('\b');
+            }
+            
+            //
+            // orientation processing
+            //
+            let last_alpha = 0;
+            let last_beta = 0;
+            let tol = 0.01;
+            
+            function handleOrientation (event) {
+
+                if ((Math.abs(last_alpha - event.alpha) > tol) || 
+                    (Math.abs(last_beta - event.beta) > tol)) {
+
+                    orientation_view.setFloat32(1, event.alpha);
+                    orientation_view.setFloat32(5, event.beta);
+                    ctrl_ws.send(orientation_buffer);
+                }
+                
+                last_alpha = event.alpha;
+                last_beta = event.beta;
+            }
+
+            //
+            // handler registering
+            //
+            let mask_idx = 0;
+
+            let left_btn = document.getElementById("mouse_btn_l");
+            let right_btn = document.getElementById("mouse_btn_r");
+            
+            left_btn.addEventListener("touchstart", button_click_start);
+            left_btn.addEventListener("touchend", button_click_end);
+            right_btn.addEventListener("touchstart", button_click_start);
+            right_btn.addEventListener("touchend", button_click_end);
+            
+            button_to_code.set(left_btn, 0x1 << (mask_idx++));
+            button_to_code.set(right_btn, 0x1 << (mask_idx++));
+            
+            for (let btn_idx = 0; btn_idx < 9; ++btn_idx) {
+                
+                let btn = document.getElementById("gp_btn_" + btn_idx);
+                
+                btn.addEventListener("touchstart", button_click_start);
+                btn.addEventListener("touchend", button_click_end);
+                
+                button_to_code.set(btn, 0x1 << (mask_idx++));
+            }
+            
+            document.button_to_code = button_to_code;
+            
+            document.getElementById("scroll_container").addEventListener("touchstart", scroll_start);
+            document.getElementById("scroll_container").addEventListener("touchmove", scroll_move);            
+            
+            window.addEventListener("deviceorientation", handleOrientation);
+        </script>
+    </body>
+</html>
