@@ -23,6 +23,6 @@ On the smartphone:
 ```shell
 git clone https://gitlab.com/camposm/remote-mouse
 ```
-Next, create a folder named "keys" and create a self signed certificate (e.g. [this](https://www.akadia.com/services/ssh_test_certificate.html)).
+Next, create a folder named "keys" inside "src" and generate a self signed certificate (e.g. [this](https://www.akadia.com/services/ssh_test_certificate.html)).
 
 
