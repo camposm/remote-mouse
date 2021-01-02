@@ -1,2 +1,5 @@
-keys/
+*.key
+*.csr
+*.org
+*.crt
 

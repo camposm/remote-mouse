@@ -3,13 +3,12 @@
 import os
 import sys
 import ssl
-import socket
+import math
 import struct
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
 import tornado.httpserver
-import numpy as np
 import pyautogui as pg
 from enum import Enum
 
@@ -89,7 +88,7 @@ class ActionProcessor:
     
     def update_orientation (self, alpha, beta):
         #
-        self.y = int(self.res_y - (self.res_y * np.tan(np.deg2rad(beta - self.beta_offset))))
+        self.y = int(self.res_y - (self.res_y * math.tan(math.radians(beta - self.beta_offset))))
         
         if self.y < 0:
             self.y = 0
@@ -100,7 +99,7 @@ class ActionProcessor:
             self.last_alpha = alpha
             return
             
-        self.x -= int(2 * self.res_x * np.tan(np.deg2rad(alpha - self.last_alpha) / 2))
+        self.x -= int(2 * self.res_x * math.tan(math.radians(alpha - self.last_alpha) / 2))
         self.last_alpha = alpha
         
         if self.x < 0:
